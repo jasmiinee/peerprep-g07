@@ -2,7 +2,7 @@ import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
 import pool from './db/index.js';
-// import questionRoutes from './routes/questions.js';
+import questionRoutes from './routes/questions.js';
 
 dotenv.config();
 
@@ -23,6 +23,49 @@ app.get('/health', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Question service listening on port ${PORT}`);
+// ── Routes ───────────────────────────────────────────────────
+app.use('/questions', questionRoutes);
+
+// ── 404 handler ──────────────────────────────────────────────
+app.use((req, res) => {
+  res.status(404).json({ error: 'Not Found', message: `Route ${req.method} ${req.path} not found.` });
 });
+
+// ── Global error handler ─────────────────────────────────────
+app.use((err, req, res, next) => {
+  console.error('[Unhandled Error]', err);
+  res.status(500).json({ error: 'Internal Server Error', message: err.message });
+});
+
+// ── Wait for DB, then start ──────────────────────────────────
+const startServer = async () => {
+  const maxRetries = 10;
+  const retryDelay = 3000;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      await pool.query('SELECT 1');
+      console.log('Database connected successfully.');
+      break;
+    } catch (err) {
+      console.log(`⏳ Waiting for database... (attempt ${attempt}/${maxRetries})`);
+      if (attempt === maxRetries) {
+        console.error('Could not connect to database. Exiting.');
+        process.exit(1);
+      }
+      await new Promise((res) => setTimeout(res, retryDelay));
+    }
+  }
+
+  app.listen(PORT, () => {
+    console.log(`Question Service running on port ${PORT}`);
+    console.log(`   Health:    GET  http://localhost:${PORT}/health`);
+    console.log(`   Questions: GET  http://localhost:${PORT}/questions`);
+    console.log(`              GET  http://localhost:${PORT}/questions/:id`);
+    console.log(`              POST http://localhost:${PORT}/questions  [Admin]`);
+    console.log(`              PUT  http://localhost:${PORT}/questions/:id  [Admin]`);
+    console.log(`              DELETE http://localhost:${PORT}/questions/:id  [Admin]`);
+  });
+};
+
+startServer();
