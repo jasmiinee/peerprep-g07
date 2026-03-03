@@ -28,12 +28,13 @@ export type Match = {
   language: Language;
 };
 
-export type EnqueueResult =
-| { status: "queued"; queueKey: string }
-| { status: "matched"; match: Match }
-| { status: "error"; message: string };
+export type InboundMessage =
+ | { type: "enqueue"; topic: Topic; difficulty: Difficulty; language: Language; }
+ | { type: "cancel"; };
 
-export type UserStateResponse =
-  | { state: "queued"; queueKey: string; elapsedMs: number; queueLength: number }
-  | { state: "matched"; match: Match }
-  | { state: "timeout" };
+ export type OutboundMessage =
+ | { type: "queued"; queueKey: QueueKeyString }
+ | { type: "matched"; match: Match }
+ | { type: "timeout" }
+ | { type: "cancelled" }
+ | { type: "error"; message: string };
