@@ -39,12 +39,21 @@ export function getToken(): string | null {
   return localStorage.getItem('token');
 }
 
+function base64UrlDecode(input: string): string {
+  let base64 = input.replace(/-/g, '+').replace(/_/g, '/');
+  const pad = base64.length % 4;
+  if (pad) {
+    base64 += '='.repeat(4 - pad);
+  }
+  return atob(base64);
+}
+
 export function isAuthenticated(): boolean {
   const token = getToken();
   if (!token) return false;
 
   try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
+    const payload = JSON.parse(base64UrlDecode(token.split('.')[1]));
     // Check if token is expired
     return payload.exp * 1000 > Date.now();
   } catch {
