@@ -39,10 +39,6 @@ export function getToken(): string | null {
   return localStorage.getItem('token');
 }
 
-<<<<<<< HEAD
-
-=======
->>>>>>> c65fc01c1900cb6ff87231d97a96e24bd218a9e8
 function base64UrlDecode(input: string): string {
   let base64 = input.replace(/-/g, '+').replace(/_/g, '/');
   const pad = base64.length % 4;
