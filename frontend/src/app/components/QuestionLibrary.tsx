@@ -24,9 +24,10 @@ import { getQuestions, deleteQuestion, type Question } from "@/app/services/ques
 interface QuestionLibraryProps {
   onStartSession?: () => void;
   onNavigateToAddQuestion?: () => void;
+  onNavigateToEditQuestion?: (question: Question) => void;
 }
 
-export function QuestionLibrary({ onStartSession, onNavigateToAddQuestion }: QuestionLibraryProps) {
+export function QuestionLibrary({ onStartSession, onNavigateToAddQuestion, onNavigateToEditQuestion }: QuestionLibraryProps) {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [questions, setQuestions] = useState<Question[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -188,22 +189,7 @@ export function QuestionLibrary({ onStartSession, onNavigateToAddQuestion }: Que
           </div>
         </div>
 
-        {/* Admin Controls */}
-        <div className="flex gap-2 mt-4 pt-4 border-t-2 border-gray-200">
-          <Badge variant="secondary" className="text-xs">Admin Controls:</Badge>
-          <Button variant="outline" size="sm" className="border-2 border-gray-300">
-            <Plus className="mr-1 h-3 w-3" />
-            Add Question
-          </Button>
-          <Button variant="outline" size="sm" className="border-2 border-gray-300">
-            <Edit className="mr-1 h-3 w-3" />
-            Update
-          </Button>
-          <Button variant="outline" size="sm" className="border-2 border-gray-300">
-            <Trash2 className="mr-1 h-3 w-3" />
-            Remove
-          </Button>
-        </div>
+        {/* Removed admin controls below search questions */}
       </div>
 
       {/* Questions Display */}
@@ -213,7 +199,7 @@ export function QuestionLibrary({ onStartSession, onNavigateToAddQuestion }: Que
         <div className="text-center py-12 text-red-600">{error}</div>
       ) : viewMode === "grid" ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredQuestions.map((question) => (
+          {filteredQuestions.map((question, idx) => (
             <div 
               key={question.questionId}
               className="border-4 border-gray-300 rounded-lg p-5 bg-white hover:border-blue-400 transition-colors cursor-pointer group"
@@ -224,7 +210,7 @@ export function QuestionLibrary({ onStartSession, onNavigateToAddQuestion }: Que
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <Badge variant="outline" className="text-xs font-mono border-gray-400 text-gray-600">
-                        Q{String(question.questionId).padStart(3, '0')}
+                        Q{String(idx + 1).padStart(3, '0')}
                       </Badge>
                     </div>
                     <h3 className="font-semibold text-gray-900">{question.title}</h3>
@@ -266,6 +252,7 @@ export function QuestionLibrary({ onStartSession, onNavigateToAddQuestion }: Que
                     variant="outline" 
                     size="sm"
                     className="flex-1 border-2 border-blue-300 text-blue-700 hover:bg-blue-50 hover:border-blue-400"
+                    onClick={() => onNavigateToEditQuestion && onNavigateToEditQuestion(question)}
                   >
                     <Edit className="mr-1 h-3 w-3" />
                     Edit
@@ -286,7 +273,7 @@ export function QuestionLibrary({ onStartSession, onNavigateToAddQuestion }: Que
         </div>
       ) : (
         <div className="space-y-3">
-          {filteredQuestions.map((question) => (
+          {filteredQuestions.map((question, idx) => (
             <div 
               key={question.questionId}
               className="border-4 border-gray-300 rounded-lg p-5 bg-white hover:border-blue-400 transition-colors cursor-pointer group"
@@ -305,7 +292,7 @@ export function QuestionLibrary({ onStartSession, onNavigateToAddQuestion }: Que
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <Badge variant="outline" className="text-xs font-mono border-gray-400 text-gray-600">
-                      Q{String(question.questionId).padStart(3, '0')}
+                      Q{String(idx + 1).padStart(3, '0')}
                     </Badge>
                     <h3 className="font-semibold text-gray-900">{question.title}</h3>
                   </div>
@@ -328,6 +315,7 @@ export function QuestionLibrary({ onStartSession, onNavigateToAddQuestion }: Que
                     variant="outline"
                     size="sm"
                     className="border-2 border-blue-300 text-blue-700 hover:bg-blue-50 hover:border-blue-400"
+                    onClick={() => onNavigateToEditQuestion && onNavigateToEditQuestion(question)}
                   >
                     <Edit className="mr-1 h-4 w-4" />
                     Edit

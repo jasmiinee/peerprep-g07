@@ -10,29 +10,33 @@ import {
   Upload, 
   Image as ImageIcon,
   Shield,
+  Edit,
   Plus,
   Trash2
 } from "lucide-react";
 import { useState } from "react";
-import { createQuestion } from "@/app/services/questionService";
+import { updateQuestion, type Question } from "@/app/services/questionService";
 
-interface AddQuestionScreenProps {
+interface EditQuestionScreenProps {
+  question: Question;
   onBack: () => void;
   onSave?: () => void;
 }
 
-export function AddQuestionScreen({ onBack, onSave }: AddQuestionScreenProps) {
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [difficulty, setDifficulty] = useState("Medium");
-  const [topic, setTopic] = useState("Arrays");
-  const [leetcodeLink, setLeetcodeLink] = useState("");
-  const [imageUploaded, setImageUploaded] = useState(false);
+export function EditQuestionScreen({ question, onBack, onSave }: EditQuestionScreenProps) {
+  const [title, setTitle] = useState(question.title);
+  const [description, setDescription] = useState(question.description);
+  const [difficulty, setDifficulty] = useState(question.difficulty);
+  const [topic, setTopic] = useState(question.topics[0] || "Arrays");
+  const [leetcodeLink, setLeetcodeLink] = useState(question.leetcodeLink || "");
+  const [imageUploaded, setImageUploaded] = useState(question.imageUrls && question.imageUrls.length > 0);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [testCases, setTestCases] = useState([
-    { input: "", expectedOutput: "" }
-  ]);
+  const [testCases, setTestCases] = useState(
+    question.testCases && question.testCases.length > 0
+      ? question.testCases.map((tc) => ({ input: tc.input, expectedOutput: tc.output }))
+      : [{ input: "", expectedOutput: "" }]
+  );
 
   const difficulties = ["Easy", "Medium", "Hard"];
   const topics = [
@@ -74,7 +78,7 @@ export function AddQuestionScreen({ onBack, onSave }: AddQuestionScreenProps) {
     }
     setIsLoading(true);
     try {
-      await createQuestion({
+      await updateQuestion(question.questionId, {
         title,
         description,
         difficulty,
@@ -85,7 +89,7 @@ export function AddQuestionScreen({ onBack, onSave }: AddQuestionScreenProps) {
       if (onSave) onSave();
       onBack();
     } catch (err: any) {
-      setError(err.response?.data?.error || err.response?.data?.message || "Failed to create question");
+      setError(err.response?.data?.error || err.response?.data?.message || "Failed to update question");
     } finally {
       setIsLoading(false);
     }
@@ -102,16 +106,16 @@ export function AddQuestionScreen({ onBack, onSave }: AddQuestionScreenProps) {
 
   return (
     <div className="space-y-6">
-      {/* Admin Header */}
+      {/* Header */}
       <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-lg p-6 text-white shadow-lg">
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm">
-              <Plus className="w-6 h-6" />
+              <Edit className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold">Add New Question</h1>
-              <p className="text-purple-100 text-sm mt-1">Create a new coding challenge for the library</p>
+              <h1 className="text-3xl font-bold">Edit Question</h1>
+              <p className="text-purple-100 text-sm mt-1">Update an existing coding challenge</p>
             </div>
           </div>
           <Button 
@@ -367,10 +371,9 @@ export function AddQuestionScreen({ onBack, onSave }: AddQuestionScreenProps) {
           className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white px-6"
         >
           <Save className="mr-2 h-4 w-4" />
-          {isLoading ? "Saving..." : "Save Question"}
+          {isLoading ? "Saving..." : "Update Question"}
         </Button>
       </div>
-
     </div>
   );
 }

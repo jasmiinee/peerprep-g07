@@ -19,18 +19,20 @@ import { UserProfileScreen } from "@/app/components/UserProfileScreen";
 import { MatchingDashboard } from "@/app/components/MatchingDashboard";
 import { QuestionLibrary } from "@/app/components/QuestionLibrary";
 import { AddQuestionScreen } from "@/app/components/AddQuestionScreen";
+import { EditQuestionScreen } from "@/app/components/EditQuestionScreen";
 import { CollaborationWorkspace } from "@/app/components/CollaborationWorkspace";
 import { SoloWorkspace } from "@/app/components/SoloWorkspace";
 import { AdminPanel } from "@/app/components/AdminPanel";
 import { isAuthenticated, logout, getProfile } from "@/app/services/authService";
 
-type Screen = "login" | "signup" | "forgotPassword" | "profile" | "matching" | "questions" | "addQuestion" | "collaboration" | "solo" | "admin";
+type Screen = "login" | "signup" | "forgotPassword" | "profile" | "matching" | "questions" | "addQuestion" | "editQuestion" | "collaboration" | "solo" | "admin";
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>("login");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [userRole, setUserRole] = useState<string>("user");
+  const [editingQuestion, setEditingQuestion] = useState<any>(null);
 
   // Check auth state on mount
   useEffect(() => {
@@ -168,8 +170,9 @@ export default function App() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {currentScreen === "profile" && <UserProfileScreen />}
         {currentScreen === "matching" && <MatchingDashboard onNavigateToCollaboration={() => setCurrentScreen("collaboration")} />}
-        {currentScreen === "questions" && (userRole === "admin" || userRole === "root-admin") && <QuestionLibrary onStartSession={() => setCurrentScreen("solo")} onNavigateToAddQuestion={() => setCurrentScreen("addQuestion")} />}
+        {currentScreen === "questions" && (userRole === "admin" || userRole === "root-admin") && <QuestionLibrary onStartSession={() => setCurrentScreen("solo")} onNavigateToAddQuestion={() => setCurrentScreen("addQuestion")} onNavigateToEditQuestion={(q) => { setEditingQuestion(q); setCurrentScreen("editQuestion"); }} />}
         {currentScreen === "addQuestion" && (userRole === "admin" || userRole === "root-admin") && <AddQuestionScreen onBack={() => setCurrentScreen("questions")} />}
+        {currentScreen === "editQuestion" && (userRole === "admin" || userRole === "root-admin") && editingQuestion && <EditQuestionScreen question={editingQuestion} onBack={() => setCurrentScreen("questions")} />}
         {currentScreen === "collaboration" && <CollaborationWorkspace onLeaveSession={() => setCurrentScreen("matching")} />}
         {currentScreen === "solo" && <SoloWorkspace onBackToLibrary={() => setCurrentScreen("questions")} />}
         {currentScreen === "admin" && userRole === "root-admin" && <AdminPanel />}
