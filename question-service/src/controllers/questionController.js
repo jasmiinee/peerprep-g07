@@ -1,4 +1,5 @@
 import pool from '../db/index.js';
+import { uploadImage, deleteImages } from '../services/s3Service.js';
 
 // ────────────────────────────────────────────────────────────
 // Helper: map DB row → clean API response object
@@ -18,6 +19,29 @@ const formatQuestion = (row) => ({
 });
 
 // ────────────────────────────────────────────────────────────
+// Helper: validate and upload image files to S3
+// Returns array of S3 URLs
+// ────────────────────────────────────────────────────────────
+const handleImageUploads = async (files) => {
+  if (!files || files.length === 0) return [];
+ 
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+  const invalidFiles = files.filter(f => !allowedTypes.includes(f.mimetype));
+  if (invalidFiles.length > 0) {
+    throw new Error(`Invalid file type(s): ${invalidFiles.map(f => f.originalname).join(', ')}. Allowed: jpeg, png, gif, webp.`);
+  }
+ 
+  const maxSize = 5 * 1024 * 1024; // 5MB
+  const oversizedFiles = files.filter(f => f.size > maxSize);
+  if (oversizedFiles.length > 0) {
+    throw new Error(`File(s) too large: ${oversizedFiles.map(f => f.originalname).join(', ')}. Max size is 5MB.`);
+  }
+ 
+  const uploadPromises = files.map(f => uploadImage(f.buffer, f.originalname, f.mimetype));
+  return Promise.all(uploadPromises);
+};
+
+// ────────────────────────────────────────────────────────────
 // POST /questions  (Admin only)
 // ────────────────────────────────────────────────────────────
 const createQuestion = async (req, res) => {
@@ -25,12 +49,20 @@ const createQuestion = async (req, res) => {
     title,
     description,
     constraints,
-    testCases,
     leetcodeLink,
     difficulty,
-    topics,
-    imageUrls,
   } = req.body;
+
+  let topics, testCases;
+  try {
+    topics = typeof req.body.topics === 'string' ? JSON.parse(req.body.topics) : req.body.topics;
+    testCases = typeof req.body.testCases === 'string' ? JSON.parse(req.body.testCases) : req.body.testCases;
+  } catch {
+    return res.status(400).json({
+      error: 'Validation Error',
+      message: 'topics and testCases must be valid JSON arrays.',
+    });
+  }
 
   // Validate required fields
   const missing = [];
@@ -55,6 +87,14 @@ const createQuestion = async (req, res) => {
       error: 'Validation Error',
       message: `difficulty must be one of: ${validDifficulties.join(', ')}`,
     });
+  }
+
+    // Upload images to S3 if any were attached
+  let imageUrls = [];
+  try {
+    imageUrls = await handleImageUploads(req.files);
+  } catch (err) {
+    return res.status(400).json({ error: 'Validation Error', message: err.message });
   }
 
   try {
@@ -180,6 +220,9 @@ const getQuestionById = async (req, res) => {
 
 // ────────────────────────────────────────────────────────────
 // PUT /questions/:id  (Admin only)
+// - New image files are uploaded to S3 and appended
+// - existingImageUrls (JSON array string) specifies which old
+//   URLs to keep — any not included are deleted from S3
 // ────────────────────────────────────────────────────────────
 const updateQuestion = async (req, res) => {
   const { id } = req.params;
@@ -192,14 +235,33 @@ const updateQuestion = async (req, res) => {
     title,
     description,
     constraints,
-    testCases,
     leetcodeLink,
     difficulty,
-    topics,
-    imageUrls,
   } = req.body;
 
-  // Vlidate fields if they are provided
+  // Parse optional array fields
+  let topics, testCases, existingImageUrls;
+  try {
+    if (req.body.topics !== undefined) {
+      topics = typeof req.body.topics === 'string' ? JSON.parse(req.body.topics) : req.body.topics;
+    }
+    if (req.body.testCases !== undefined) {
+      testCases = typeof req.body.testCases === 'string' ? JSON.parse(req.body.testCases) : req.body.testCases;
+    }
+    // existingImageUrls = URLs the admin wants to KEEP from the current set
+    if (req.body.existingImageUrls !== undefined) {
+      existingImageUrls = typeof req.body.existingImageUrls === 'string'
+        ? JSON.parse(req.body.existingImageUrls)
+        : req.body.existingImageUrls;
+    }
+  } catch {
+    return res.status(400).json({
+      error: 'Validation Error',
+      message: 'topics, testCases, and existingImageUrls must be valid JSON arrays.',
+    });
+  }
+
+  // Validate fields if they are provided
   if (difficulty) {
     const validDifficulties = ['Easy', 'Medium', 'Hard'];
     if (!validDifficulties.includes(difficulty)) {
@@ -233,6 +295,34 @@ const updateQuestion = async (req, res) => {
 
     const current = existing.rows[0];
 
+    // ── Image handling ───────────────────────────────────────
+    // 1. Upload any new image files to S3
+    let newlyUploadedUrls = [];
+    try {
+      newlyUploadedUrls = await handleImageUploads(req.files);
+    } catch (err) {
+      return res.status(400).json({ error: 'Validation Error', message: err.message });
+    }
+ 
+    // 2. Determine final image_urls for the DB
+    let finalImageUrls;
+    if (existingImageUrls !== undefined) {
+      // Admin explicitly specified which old URLs to keep
+      // Delete any old URLs that are no longer in the keep list
+      const removedUrls = current.image_urls.filter(url => !existingImageUrls.includes(url));
+      if (removedUrls.length > 0) {
+        await deleteImages(removedUrls).catch(e => console.error('[updateQuestion] S3 delete failed:', e));
+      }
+      // Final = kept old URLs + newly uploaded URLs
+      finalImageUrls = [...existingImageUrls, ...newlyUploadedUrls];
+    } else if (newlyUploadedUrls.length > 0) {
+      // No existingImageUrls specified — just append new uploads to existing
+      finalImageUrls = [...current.image_urls, ...newlyUploadedUrls];
+    } else {
+      // No image changes at all — keep existing
+      finalImageUrls = current.image_urls;
+    }
+
     const result = await pool.query(
       `UPDATE questions SET
          title         = $1,
@@ -253,7 +343,7 @@ const updateQuestion = async (req, res) => {
         leetcodeLink !== undefined ? leetcodeLink : current.leetcode_link,
         difficulty   ?? current.difficulty,
         topics       ?? current.topics,
-        imageUrls    ?? current.image_urls,
+        finalImageUrls,
         id,
       ]
     );
@@ -270,6 +360,7 @@ const updateQuestion = async (req, res) => {
 
 // ────────────────────────────────────────────────────────────
 // DELETE /questions/:id  (Admin only)
+// Deletes the question AND all its S3 images
 // ────────────────────────────────────────────────────────────
 const deleteQuestion = async (req, res) => {
   const { id } = req.params;
@@ -279,17 +370,23 @@ const deleteQuestion = async (req, res) => {
   }
 
   try {
-    const result = await pool.query(
-      'DELETE FROM questions WHERE question_id = $1 RETURNING question_id, title',
-      [id]
-    );
 
-    if (result.rows.length === 0) {
+    const existing = await pool.query('SELECT * FROM questions WHERE question_id = $1', [id]);
+    if (existing.rows.length === 0) {
       return res.status(404).json({ error: 'Not Found', message: `Question with ID ${id} not found.` });
     }
 
+    const { title, image_urls } = existing.rows[0];
+    // Delete all S3 images first
+    if (image_urls && image_urls.length > 0) {
+      await deleteImages(image_urls).catch(e => console.error('[deleteQuestion] S3 cleanup failed:', e));
+    }
+ 
+    // Delete the question from DB
+    await pool.query('DELETE FROM questions WHERE question_id = $1', [id]);
+
     return res.status(200).json({
-      message: `Question "${result.rows[0].title}" (ID: ${result.rows[0].question_id}) deleted successfully.`,
+      message: `Question "${title}" (ID: ${id}) and ${image_urls.length} image(s) deleted successfully.`,
     });
   } catch (err) {
     console.error('[deleteQuestion]', err);

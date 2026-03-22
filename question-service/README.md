@@ -96,7 +96,7 @@ npm start
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PORT` | `3000` | Port the service listens on |
+| `PORT` | `3001` | Port the service listens on |
 | `DB_HOST` | `postgres` | PostgreSQL host (`localhost` when running outside Docker) |
 | `DB_PORT` | `5432` | PostgreSQL port |
 | `DB_NAME` | `peerprep_questions` | Database name |
@@ -165,7 +165,7 @@ For database questions with multiple input tables:
 
 ### Base URL
 ```
-http://localhost:3000
+http://localhost:3001
 ```
 
 ---
@@ -253,7 +253,7 @@ GET /questions?topics=Algorithms&difficulty=Medium
 
 ### Create Question *(Admin only)*
 
-| Method | Path | Auth (To be implemented) |
+| Method | Path | Auth |
 |--------|------|------|
 | POST | `/questions` | `Authorization: Bearer <token>` |
 
@@ -290,7 +290,7 @@ GET /questions?topics=Algorithms&difficulty=Medium
 
 ### Update Question *(Admin only)*
 
-| Method | Path | Auth (To be implemented) |
+| Method | Path | Auth |
 |--------|------|------|
 | PUT | `/questions/:id` | `Authorization: Bearer <token>` |
 
@@ -302,7 +302,7 @@ Send only the fields you want to update. All fields are optional — unset field
 
 ### Delete Question *(Admin only)*
 
-| Method | Path | Auth (To be implemented)|
+| Method | Path | Auth |
 |--------|------|------|
 | DELETE | `/questions/:id` | `Authorization: Bearer <token>` |
 
@@ -361,25 +361,25 @@ docker compose up
 
 ```bash
 # Health check
-curl http://localhost:3000/health
+curl http://localhost:3001/health
 
 # Get all questions
-curl http://localhost:3000/questions
+curl http://localhost:3001/questions
 
 # Filter by difficulty
-curl "http://localhost:3000/questions?difficulty=Easy"
+curl "http://localhost:3001/questions?difficulty=Easy"
 
 # Filter by multiple topics
-curl "http://localhost:3000/questions?topics=Strings,Algorithms"
+curl "http://localhost:3001/questions?topics=Strings,Algorithms"
 
 # Filter by topic and difficulty
-curl "http://localhost:3000/questions?topics=Algorithms&difficulty=Medium"
+curl "http://localhost:3001/questions?topics=Algorithms&difficulty=Medium"
 
 # Get question by ID
-curl http://localhost:3000/questions/1
+curl http://localhost:3001/questions/1
 
 # Create a question (admin auth bypassed for local testing)
-curl -X POST http://localhost:3000/questions \
+curl -X POST http://localhost:3001/questions \
   -H "Content-Type: application/json" \
   -d '{
     "title": "Two Sum",
@@ -390,12 +390,12 @@ curl -X POST http://localhost:3000/questions \
   }'
 
 # Update a question
-curl -X PUT http://localhost:3000/questions/1 \
+curl -X PUT http://localhost:3001/questions/1 \
   -H "Content-Type: application/json" \
   -d '{ "difficulty": "Medium" }'
 
 # Delete a question
-curl -X DELETE http://localhost:3000/questions/1
+curl -X DELETE http://localhost:3001/questions/1
 ```
 
 ---
