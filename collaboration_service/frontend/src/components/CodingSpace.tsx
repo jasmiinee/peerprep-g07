@@ -1,7 +1,7 @@
 import { useSearchParams } from "react-router-dom";
 import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { MonacoBinding } from "y-monaco"
 import Editor from "@monaco-editor/react"
 import { useNavigate } from 'react-router-dom'
