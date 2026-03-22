@@ -1,0 +1,40 @@
+services:
+  redis:
+    image: redis:7
+    container_name: peerprep-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: peerprep-backend
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_URL=redis://redis:6379
+    ports:
+      - "3003:3000"
+      - "8081:8080"
+    depends_on:
+      - redis
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: peerprep-frontend
+    environment:
+      - VITE_API_URL=http://localhost:3003
+      - VITE_WS_URL=ws://localhost:8081/yjs
+      - VITE_MATCH_WS_URL=ws://localhost:8081
+    ports:
+      - "3038:3038"
+    depends_on:
+      - backend
+
+volumes:
+  redis-data:
