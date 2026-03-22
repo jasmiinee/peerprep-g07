@@ -1,12 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-interface MatchingPageProps {
-    setQuestion: (question: string) => void
-    setProgrammingLanguage: (language: string) => void
-}
-
-export default function MatchingPage({ setQuestion, setProgrammingLanguage }: MatchingPageProps) {
+export default function MatchingPage() {
+    const matchWsUrl = import.meta.env.VITE_MATCH_WS_URL || "ws://localhost:8080"
 
     const navigate = useNavigate()
     const [isFindingMatch, setIsFindingMatch] = useState(false)
@@ -15,7 +11,17 @@ export default function MatchingPage({ setQuestion, setProgrammingLanguage }: Ma
 
     // Creates a new WebSocket connection when the page loads
     useEffect(() => {
-        const socket = new WebSocket('ws://localhost:8080');
+        const storedRoomId = localStorage.getItem("roomId")
+
+        // Automatically reconnect user if user refreshes the page or disconnects without leaving the page
+        if (storedRoomId) {
+            navigate(`/codingspace?roomId=${storedRoomId}`)
+            return
+        }
+
+        // When opening the matching page, immediately creates a client websocket 
+        // meant for matchingmaking service
+        const socket = new WebSocket(matchWsUrl);
 
         socket.onopen = () => console.log("WebSocket connected"); 
         socket.onmessage = (event) => {
@@ -23,16 +29,15 @@ export default function MatchingPage({ setQuestion, setProgrammingLanguage }: Ma
             if (data.type === "match_found") {
                 console.log("Match found, room ID: ", data.roomId)
                 console.log("Matched with another user!")
-                setQuestion(data.question)
-                setProgrammingLanguage(data.programmingLanguage)
-                navigate(`/codingspace?roomId=${data.roomId}}`)
+                localStorage.setItem("roomId", data.roomId)
+                navigate(`/codingspace?roomId=${data.roomId}`)
             }
         }
         setWs(socket)
 
         return () => socket.close()
 
-    }, [])
+    }, [navigate, matchWsUrl])
 
     const handleFindMatch = () => {
         if (!ws || !text) {
@@ -40,8 +45,17 @@ export default function MatchingPage({ setQuestion, setProgrammingLanguage }: Ma
             return
         }
 
-        ws.send(JSON.stringify({ type: "find_match", text }))
-        setIsFindingMatch(!isFindingMatch)
+        // Cancel matchmaking still not working well
+        if (isFindingMatch) {
+            console.log("Cancelling match search")
+            setIsFindingMatch(!isFindingMatch)
+            return
+        } else {
+            // start matachmaking
+            console.log("Finding match with text: ", text)
+            ws.send(JSON.stringify({ type: "find_match", text }))
+            setIsFindingMatch(!isFindingMatch)
+        }
     }
 
     return (

@@ -1,0 +1,23 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: peerprep-backend
+    ports:
+      - "3003:3000"
+      - "8081:8080"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: peerprep-frontend
+    environment:
+      - VITE_API_URL=http://localhost:3003
+      - VITE_WS_URL=ws://localhost:8081/yjs
+      - VITE_MATCH_WS_URL=ws://localhost:8081
+    ports:
+      - "3038:3038"
+    depends_on:
+      - backend

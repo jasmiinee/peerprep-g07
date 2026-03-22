@@ -1,25 +1,29 @@
 const WebSocket = require('ws');
 const crypto = require('crypto');
+const express = require("express");
+const cors = require("cors");
 
-
+// For websocket
 const PORT = 8080;
-
-// Create a WebSocket server
+// Create a WebSocket server for the matchmaking service
 const wss = new WebSocket.Server({ port: PORT }, () => {
     console.log(`WebSocket server is running on ws://localhost:${PORT}`);
 })
 
 // Trying to match users based on text written, if same text then matched and put into the same room
-// { text : [client1, client2] }
+// At every point text will only have 1 client waiting, if there is a 2nd client it will be popped and matched
+// { text : client(Websocket) }
+// Used for the matching service
 const waitingUsers = {};
 
-// { roomId: [WebSocket, WebSocket] } 
-// This is for tracking whoever is in the matching
-const rooms = {}; 
-
 // Yjs room tracking: { roomName: Set<WebSocket> } 
-// This is to track who is still connected or not
+// This is to track who is still connected or not, only created when Monaco Editor is mounted
 const yjsRooms = {};
+
+// Potentially fetching this data from redis in the future, but for now we can just store it in memory since we are only running 1 instance of the server
+// contains information of {roomId: {question: "", programmingLanguage: ""}} for the question and programming language associated with each room,
+// this is used when the client first connects to the room to get the question and programming language information
+const dataRooms = {}
 
 function handleYjsConnection(ws, roomId) {
     if (!yjsRooms[roomId]) {
@@ -54,13 +58,15 @@ function handleYjsConnection(ws, roomId) {
     });
 }
 
-// Listening for connection events
+// Listening for connection for matchmaking
 wss.on('connection', (ws, req) => {
-
     // If the connection is for Yjs syncing
     if (req.url.startsWith("/yjs")) {
-        // get the uuid from the url
-        const roomId = req.url.slice('/yjs/'.length) || 'default';
+        // Parse room id safely from /yjs/:roomId (ignore query string)
+        const requestUrl = new URL(req.url, `ws://${req.headers.host}`);
+        const pathParts = requestUrl.pathname.split('/').filter(Boolean);
+        const roomId = pathParts[1] || 'default';
+        console.log("Start YJS connection")
         handleYjsConnection(ws, roomId);
         return;
     }
@@ -69,35 +75,39 @@ wss.on('connection', (ws, req) => {
 
     ws.on('message', (message) => {
         const { type, text } = JSON.parse(message);
-
-        // Logic for handling matching of people now im only matching based on text input
+        // Logic for handling matching of people when ppl click find match button 
         if (type === "find_match") {
-            if (waitingUsers[text] && waitingUsers[text].length > 0) {
+            // if there is a user waiting with the same text, match them together and remove from dictionary
+            if (waitingUsers[text]) {
                 // Match is found and there is a client to the text
                 // Create a new room and redirect both clients into the coding space
                 console.log('Match Found, creating room');
 
-                const otherWs = waitingUsers[text].pop(); // Get the other client
-                const roomId = crypto.randomUUID();// Unique room ID based on timestamp
-                const question = `
-                Given an integer array nums, return all the triplets [nums[i], nums[j], nums[k]] 
-                where nums[i] + nums[j] + nums[k] == 0, and the indices i, j and k are all distinct.
-                The output should not contain any duplicate triplets. 
-                You may return the output and the triplets in any order.`;
-                const programmingLanguage = "python";
+                const otherWs = waitingUsers[text]; // Get the other client waiting in the dictionary
+                delete waitingUsers[text]; // Remove the matched client from the waiting list
 
-                // Create a new room and store the clients
-                rooms[roomId] = [ws, otherWs];
+                const roomId = crypto.randomUUID();// Unique room ID based on timestamp
+
+                // Fetch data from question service based on the text
+                const question = `
+                    Given an integer array nums, return all the triplets [nums[i], nums[j], nums[k]] 
+                    where nums[i] + nums[j] + nums[k] == 0, and the indices i, j and k are all distinct.
+                    The output should not contain any duplicate triplets. 
+                    You may return the output and the triplets in any order.`;
+                const programmingLanguage = "python";
+                dataRooms[roomId] = {
+                    question,
+                    programmingLanguage
+                }
 
                 // Notify both clients about the match and room ID
-                ws.send(JSON.stringify({ type: 'match_found', roomId, question, programmingLanguage }));
-                otherWs.send(JSON.stringify({ type: 'match_found', roomId, question, programmingLanguage }));
-
+                ws.send(JSON.stringify({ type: 'match_found', roomId }));
+                otherWs.send(JSON.stringify({ type: 'match_found', roomId }));
             } else {
                 // No match found, add user to waiting list
                 if (!waitingUsers[text]) {
-                    waitingUsers[text] = [];
-                    waitingUsers[text].push(ws);
+                    waitingUsers[text] = ws;
+                    console.log("Waiting Users:", waitingUsers)
                 }
             }
         }
@@ -107,3 +117,31 @@ wss.on('connection', (ws, req) => {
         console.log('Client Disconnected');
     });
 })
+
+
+// For API calls to question service
+const app = express();
+app.use(cors());
+
+app.get("/room/:roomId", (req, res) => {
+    const { roomId } = req.params;
+
+    // For now we are hardcoding the question and programming language, 
+    // but in the future we can fetch it from the question service based on the roomId
+    const room = dataRooms[roomId];
+
+    if (!room) {
+        return res.status(404).json({ error: "Room not found" });
+    }
+
+    return res.json({
+        question: room.question,
+        programmingLanguage: room.programmingLanguage
+    });
+});
+
+const HTTP_PORT = 3000;
+
+app.listen(HTTP_PORT, () => {
+    console.log(`HTTP server running on http://localhost:${HTTP_PORT}`);
+});
