@@ -49,6 +49,14 @@ export async function updateUser(
   return result.rows[0];
 }
 
+export async function updateUserPassword(email, hashedPassword) {
+  const result = await query(
+    "UPDATE users SET hashed_password = $1 WHERE email = $2 RETURNING id, email, username, preferred_language, topics_of_interest, created_at",
+    [hashedPassword, email],
+  );
+  return result.rows[0];
+}
+
 export async function deleteUserByEmail(email) {
   const result = await query(
     "DELETE FROM users WHERE email = $1 RETURNING id, email, username, access_role, created_at",

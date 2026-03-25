@@ -3,6 +3,7 @@ import {
   createUser,
   getUserBySelf,
   updateUser,
+  updateUserPassword,
   deleteUser,
   getUserByEmail,
   updateUserRoleByEmail,
@@ -21,7 +22,10 @@ router.post('/', createUser);
 // Authenticated routes
 router.get('/me', verifyAccessToken, getUserBySelf);
 
+router.patch("/me/password", verifyAccessToken, updateUserPassword);
+
 router.patch('/me', verifyAccessToken, updateUser);
+
 
 router.delete("/me", verifyAccessToken, deleteUser);
 

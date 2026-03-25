@@ -3,6 +3,7 @@ import {
   getUserByEmail as _getUserByEmail,
   getUserById as _getUserById,
   updateUser as _updateUser,
+  updateUserPassword as _updateUserPassword,
   deleteUserByEmail as _deleteUserByEmail,
   updateUserRoleByEmail as _updateUserRoleByEmail,
   getAllUsers as _getAllUsers,
@@ -119,6 +120,55 @@ export async function updateUser(req, res) {
   }
 }
 
+export async function updateUserPassword(req, res) {
+  try {
+    const { email } = req.user;
+    const { new_password, current_password } = req.body;
+
+    if (!new_password || !current_password) {
+      return res
+        .status(400)
+        .json({ error: "Current password and new password are required" });
+    }
+
+    const user = await _getUserByEmail(email);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const passwordMatch = bcrypt.compareSync(
+      current_password,
+      user.hashed_password,
+    );
+    if (!passwordMatch) {
+      return res.status(401).json({ error: "Current password is incorrect" });
+    }
+
+    // check if new password is valid
+    const isMinLength = new_password.length >= 8;
+    const hasUpperCase = /[A-Z]/.test(new_password);
+    const hasLowerCase = /[a-z]/.test(new_password);
+    const hasDigit = /\d/.test(new_password);
+
+    if (!isMinLength || !hasUpperCase || !hasLowerCase || !hasDigit) {
+      return res.status(400).json({
+        error:
+          "New password must be at least 8 characters long and include uppercase letters, lowercase letters, and digits",
+      });
+    }
+
+    // hash new password before storing in database
+    const salt = bcrypt.genSaltSync(10);
+    const hashedPassword = bcrypt.hashSync(new_password, salt);
+
+    const result = await _updateUserPassword(email, hashedPassword);
+    return res.status(200).json(mapUserToView(result));
+  } catch (error) {
+    console.error("Error updating user password:", error);
+    return res.status(500).json({ error: "Failed to update user password" });
+  }
+}
+
 export async function deleteUser(req, res) {
   try {
     const { email, role } = req.user;
@@ -132,6 +182,7 @@ export async function deleteUser(req, res) {
     if (!result) {
       return res.status(404).json({ error: "User not found" });
     }
+    return res.status(200).json(mapUserToView(result));
   } catch (error) {
     console.error("Error deleting user:", error);
     return res.status(500).json({ error: "Failed to delete user" });
