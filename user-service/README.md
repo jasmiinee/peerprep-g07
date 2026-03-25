@@ -193,6 +193,7 @@ Request:
 `PATCH /users/me` (Authenticated)
 
 - Header: `Authorization: Bearer <jwt-token>`
+- Returns profile data and updated jwt-token
 - Request body requires `username` and may include optional fields:
 
 ```json

@@ -9,6 +9,7 @@ import {
   getAllUsers as _getAllUsers,
 } from "../database/query.js";
 import bcrypt from 'bcrypt';
+import jwt from "jsonwebtoken";
 import { mapUserToView } from '../utils/view.js';
 
 export async function createUser(req, res) {
@@ -113,7 +114,23 @@ export async function updateUser(req, res) {
       preferred_language,
       topics_of_interest,
     );
-    return res.status(200).json(mapUserToView(result));
+
+    if (!result) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const updatedUser = mapUserToView(result);
+    const token = jwt.sign(
+      {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        username: updatedUser.username,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "3d" },
+    );
+
+    return res.status(200).json({ ...updatedUser, token });
   } catch (error) {
     console.error('Error updating user:', error);
     return res.status(500).json({ error: 'Failed to update user' });
