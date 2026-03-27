@@ -8,6 +8,7 @@ The Question Service is a REST API that manages the storage, retrieval, and admi
 
 - **Runtime**: Node.js 20 (Express)
 - **Database**: PostgreSQL 16
+- **Image Storage**: AWS S3
 - **Containerisation**: Docker + Docker Compose
 - **Module System**: ES Modules (`import`/`export`)
 
@@ -17,10 +18,7 @@ The Question Service is a REST API that manages the storage, retrieval, and admi
 
 ```
 question-service/
-├── docker-compose.yml          # Spins up Postgres + Question Service
 ├── Dockerfile                  # Container image for the service
-├── .env                        # Local environment variables (do not commit)
-├── .env.example                # Template for environment variables
 ├── package.json
 └── src/
     ├── index.js                # Entry point - Express setup & DB wait loop
@@ -29,8 +27,11 @@ question-service/
     │   └── init.sql            # Schema creation + seed data (20 questions)
     ├── middleware/
     │   └── auth.js             # requireAdmin – calls User Service to verify role
+    ├── services/
+    │   └── s3Service.js        # AWS S3 client – upload and delete images
     ├── controllers/
-    │   └── questionController.js  # All business logic
+    │   └── questionController.js  # CRUD business logic
+    │   └── imageController.js     # Standalone image upload/delete
     └── routes/
         └── questions.js        # Route definitions
 ```
@@ -41,6 +42,7 @@ question-service/
 
 ### Prerequisites
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+- AWS account with an S3 bucket created 
 
 ### Run with Docker
 
@@ -96,12 +98,17 @@ npm start
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PORT` | `3000` | Port the service listens on |
+| `PORT` | `3001` | Port the service listens on |
 | `DB_HOST` | `postgres` | PostgreSQL host (`localhost` when running outside Docker) |
 | `DB_PORT` | `5432` | PostgreSQL port |
 | `DB_NAME` | `peerprep_questions` | Database name |
 | `DB_USER` | `postgres` | Database user |
 | `DB_PASSWORD` | `postgres` | Database password |
+| `USER_SERVICE_URL` | URL of the User Service for admin verification |
+| `AWS_REGION` | AWS region of your S3 bucket (e.g. `ap-southeast-1`) |
+| `AWS_ACCESS_KEY_ID` | AWS IAM access key |
+| `AWS_SECRET_ACCESS_KEY` | AWS IAM secret key |
+| `S3_BUCKET_NAME` | Name of your S3 bucket |
 
 
 ---
@@ -165,7 +172,7 @@ For database questions with multiple input tables:
 
 ### Base URL
 ```
-http://localhost:3000
+http://localhost:3001
 ```
 
 ---
@@ -253,29 +260,27 @@ GET /questions?topics=Algorithms&difficulty=Medium
 
 ### Create Question *(Admin only)*
 
-| Method | Path | Auth (To be implemented) |
+| Method | Path | Auth |
 |--------|------|------|
 | POST | `/questions` | `Authorization: Bearer <token>` |
+
+**Content-Type:** `multipart/form-data`
 
 **Required fields:** `title`, `description`, `difficulty`, `topics`, `testCases`
 
 **Request Body**
-```json
-{
-  "title": "Two Sum",
-  "description": "Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.",
-  "constraints": "2 <= nums.length <= 10^4",
-  "testCases": [
-    { "input": "nums = [2,7,11,15], target = 9", "output": "[0,1]" }
-  ],
-  "leetcodeLink": "https://leetcode.com/problems/two-sum/",
-  "difficulty": "Easy",
-  "topics": ["Arrays", "Hash Table"],
-  "imageUrls": []
-}
-```
-
-**Response 201** — created question object.
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `title` | text | Yes | Question title |
+| `description` | text | Yes | Full question description |
+| `constraints` | text | No | Constraints string |
+| `testCases` | text (JSON string) | Yes | e.g. `[{"input":"...","output":"..."}]` |
+| `leetcodeLink` | text | No | URL to LeetCode problem |
+| `difficulty` | text | Yes | `Easy`, `Medium`, or `Hard` |
+| `topics` | text (JSON string) | Yes | e.g. `["Arrays","Hash Table"]` |
+| `images` | file(s) | No | Image files (jpeg, png, gif, webp — max 5MB each) |
+ 
+**Response 201** — created question object with `imageUrls` populated if images were uploaded.
 
 **Response 400** — missing or invalid fields:
 ```json
@@ -290,11 +295,34 @@ GET /questions?topics=Algorithms&difficulty=Medium
 
 ### Update Question *(Admin only)*
 
-| Method | Path | Auth (To be implemented) |
+| Method | Path | Auth |
 |--------|------|------|
 | PUT | `/questions/:id` | `Authorization: Bearer <token>` |
 
+**Content-Type:** `multipart/form-data`
+
 Send only the fields you want to update. All fields are optional — unset fields keep their existing values.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `title` | text | Updated title |
+| `description` | text | Updated description |
+| `constraints` | text | Updated constraints |
+| `testCases` | text (JSON string) | Updated test cases |
+| `leetcodeLink` | text | Updated LeetCode link |
+| `difficulty` | text | Updated difficulty |
+| `topics` | text (JSON string) | Updated topics |
+| `existingImageUrls` | text (JSON string) | Array of current URLs to **keep** — any not included are deleted from S3 |
+| `images` | file(s) | New image files to upload and append |
+
+**Image update behaviour:**
+ 
+| Scenario | What to send |
+|----------|-------------|
+| Keep all existing images, add new ones | Send new `images` files only |
+| Remove some existing images, keep others | Send `existingImageUrls` with only the URLs to keep |
+| Remove all existing images | Send `existingImageUrls: []` |
+| No image changes | Omit both `existingImageUrls` and `images` |
 
 **Response 200** — updated question object.
 
@@ -302,9 +330,11 @@ Send only the fields you want to update. All fields are optional — unset field
 
 ### Delete Question *(Admin only)*
 
-| Method | Path | Auth (To be implemented)|
+| Method | Path | Auth |
 |--------|------|------|
 | DELETE | `/questions/:id` | `Authorization: Bearer <token>` |
+
+Deletes the question from the database **and** removes all associated images from S3.
 
 **Response 200**
 ```json
@@ -358,44 +388,78 @@ docker compose up
 ```
 
 ### Quick curl examples
-
 ```bash
 # Health check
-curl http://localhost:3000/health
+curl http://localhost:3001/health
 
 # Get all questions
-curl http://localhost:3000/questions
+curl http://localhost:3001/questions
 
 # Filter by difficulty
-curl "http://localhost:3000/questions?difficulty=Easy"
+curl "http://localhost:3001/questions?difficulty=Easy"
 
 # Filter by multiple topics
-curl "http://localhost:3000/questions?topics=Strings,Algorithms"
+curl "http://localhost:3001/questions?topics=Strings,Algorithms"
 
 # Filter by topic and difficulty
-curl "http://localhost:3000/questions?topics=Algorithms&difficulty=Medium"
+curl "http://localhost:3001/questions?topics=Algorithms&difficulty=Medium"
 
 # Get question by ID
-curl http://localhost:3000/questions/1
+curl http://localhost:3001/questions/1
 
-# Create a question (admin auth bypassed for local testing)
-curl -X POST http://localhost:3000/questions \
+# Create a question with no image
+curl -X POST http://localhost:3001/questions \
+  -H "Authorization: Bearer " \
+  -F "title=Two Sum" \
+  -F "description=Given an array of integers..." \
+  -F "difficulty=Easy" \
+  -F 'topics=["Arrays","Hash Table"]' \
+  -F 'testCases=[{"input":"nums = [2,7,11,15], target = 9","output":"[0,1]"}]'
+
+# Create a question with an image
+curl -X POST http://localhost:3001/questions \
+  -H "Authorization: Bearer " \
+  -F "title=Two Sum" \
+  -F "description=Given an array of integers..." \
+  -F "difficulty=Easy" \
+  -F 'topics=["Arrays","Hash Table"]' \
+  -F 'testCases=[{"input":"nums = [2,7,11,15], target = 9","output":"[0,1]"}]' \
+  -F "images=@/path/to/image.png"
+
+# Update a question — text fields only
+curl -X PUT http://localhost:3001/questions/1 \
+  -H "Authorization: Bearer " \
+  -F "difficulty=Medium"
+
+# Update a question — remove an image (send only URLs you want to keep)
+curl -X PUT http://localhost:3001/questions/1 \
+  -H "Authorization: Bearer " \
+  -F 'existingImageUrls=["https://s3.../image1.png"]'
+
+# Update a question — remove all images
+curl -X PUT http://localhost:3001/questions/1 \
+  -H "Authorization: Bearer " \
+  -F "existingImageUrls=[]"
+
+# Update a question — add a new image
+curl -X PUT http://localhost:3001/questions/1 \
+  -H "Authorization: Bearer " \
+  -F "images=@/path/to/newimage.png"
+
+# Delete a question (also deletes all S3 images)
+curl -X DELETE http://localhost:3001/questions/1 \
+  -H "Authorization: Bearer "
+
+# Upload images to an existing question
+curl -X POST http://localhost:3001/questions/1/images \
+  -H "Authorization: Bearer " \
+  -F "images=@/path/to/image.png"
+
+# Delete a specific image from a question
+curl -X DELETE http://localhost:3001/questions/1/images \
+  -H "Authorization: Bearer " \
   -H "Content-Type: application/json" \
-  -d '{
-    "title": "Two Sum",
-    "description": "Given an array of integers...",
-    "difficulty": "Easy",
-    "topics": ["Arrays"],
-    "testCases": [{"input": "nums = [2,7,11,15], target = 9", "output": "[0,1]"}]
-  }'
-
-# Update a question
-curl -X PUT http://localhost:3000/questions/1 \
-  -H "Content-Type: application/json" \
-  -d '{ "difficulty": "Medium" }'
-
-# Delete a question
-curl -X DELETE http://localhost:3000/questions/1
+  -d '{"imageUrl": "https://s3.../questions/uuid.png"}'
 ```
 
 ---
