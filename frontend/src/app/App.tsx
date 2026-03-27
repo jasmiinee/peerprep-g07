@@ -1,14 +1,11 @@
 import { useState, useEffect, useRef } from "react";
+import { Route, Routes, useNavigate } from "react-router-dom";
 import { Button } from "@/app/components/ui/button";
-import { Badge } from "@/app/components/ui/badge";
 import { 
   User, 
   Users, 
   BookOpen, 
-  Code2, 
   Menu,
-  Home,
-  ArrowRight,
   X,
   Shield
 } from "lucide-react";
@@ -20,7 +17,7 @@ import { MatchingDashboard } from "@/app/components/MatchingDashboard";
 import { QuestionLibrary } from "@/app/components/QuestionLibrary";
 import { AddQuestionScreen } from "@/app/components/AddQuestionScreen";
 import { EditQuestionScreen } from "@/app/components/EditQuestionScreen";
-import { CollaborationWorkspace } from "@/app/components/CollaborationWorkspace";
+import { CollaborationWorkspace } from "@/app/components/collaboration_page/CollaborationWorkspace";
 import { SoloWorkspace } from "@/app/components/SoloWorkspace";
 import { AdminPanel } from "@/app/components/AdminPanel";
 import { SciFiBackground } from "@/app/components/SciFiBackground";
@@ -36,9 +33,10 @@ import {
 } from "@/app/components/ui/alert-dialog";
 import { isAuthenticated, logout, getProfile } from "@/app/services/authService";
 
-type Screen = "login" | "signup" | "forgotPassword" | "profile" | "matching" | "questions" | "addQuestion" | "editQuestion" | "collaboration" | "solo" | "admin";
+type Screen = "login" | "signup" | "forgotPassword" | "profile" | "matching" | "questions" | "addQuestion" | "editQuestion" | "solo" | "admin";
 
-export default function App() {
+function MainAppPage() {
+  const navigate = useNavigate();
   const [currentScreen, setCurrentScreen] = useState<Screen>("login");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -115,7 +113,6 @@ export default function App() {
   const navigationItems = [
     { id: "matching" as Screen, label: "Match Dashboard", icon: Users },
     ...(userRole === "admin" || userRole === "root-admin" ? [{ id: "questions" as Screen, label: "Question Library", icon: BookOpen }] : []),
-    { id: "collaboration" as Screen, label: "Collaboration", icon: Code2 },
     { id: "profile" as Screen, label: "Profile", icon: User },
     ...(userRole === "root-admin" ? [{ id: "admin" as Screen, label: "User Management", icon: Shield }] : []),
   ];
@@ -156,8 +153,7 @@ export default function App() {
                     {item.label}
                   </Button>
                 );
-              })}
-              <Button 
+              })}              <Button 
                 variant="outline" 
                 onClick={handleLogout}
                 className="ml-2 border border-white/20 text-black hover:bg-white/10"
@@ -211,11 +207,10 @@ export default function App() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
         {currentScreen === "profile" && <UserProfileScreen />}
-        {currentScreen === "matching" && <MatchingDashboard onNavigateToCollaboration={() => setCurrentScreen("collaboration")} onMatchingStateChange={handleMatchingStateChange} />}
+        {currentScreen === "matching" && <MatchingDashboard onMatchingStateChange={handleMatchingStateChange} />}
         {currentScreen === "questions" && (userRole === "admin" || userRole === "root-admin") && <QuestionLibrary onStartSession={() => setCurrentScreen("solo")} onNavigateToAddQuestion={() => setCurrentScreen("addQuestion")} onNavigateToEditQuestion={(q) => { setEditingQuestion(q); setCurrentScreen("editQuestion"); }} />}
         {currentScreen === "addQuestion" && (userRole === "admin" || userRole === "root-admin") && <AddQuestionScreen onBack={() => setCurrentScreen("questions")} />}
         {currentScreen === "editQuestion" && (userRole === "admin" || userRole === "root-admin") && editingQuestion && <EditQuestionScreen question={editingQuestion} onBack={() => setCurrentScreen("questions")} />}
-        {currentScreen === "collaboration" && <CollaborationWorkspace onLeaveSession={() => setCurrentScreen("matching")} />}
         {currentScreen === "solo" && <SoloWorkspace onBackToLibrary={() => setCurrentScreen("questions")} />}
         {currentScreen === "admin" && userRole === "root-admin" && <AdminPanel />}
       </main>
@@ -240,5 +235,26 @@ export default function App() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+function CollaborationPage() {
+
+  return (
+    <div className="relative min-h-screen">
+      <SciFiBackground />
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
+        <CollaborationWorkspace />
+      </main>
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<MainAppPage />} />
+      <Route path="/collaboration" element={<CollaborationPage />} />
+    </Routes>
   );
 }

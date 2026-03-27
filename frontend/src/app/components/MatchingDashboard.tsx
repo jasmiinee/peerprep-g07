@@ -1,7 +1,6 @@
-import { Button } from "@/app/components/ui/button";
-import { Badge } from "@/app/components/ui/badge";
-import { Label } from "@/app/components/ui/label";
-import { Checkbox } from "@/app/components/ui/checkbox";
+import { Button } from "../../app/components/ui/button";
+import { Badge } from "../../app/components/ui/badge";
+import { Label } from "../../app/components/ui/label";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -11,7 +10,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/app/components/ui/alert-dialog";
+} from "../../app/components/ui/alert-dialog";
 import {
   Users,
   Clock,
@@ -24,11 +23,12 @@ import {
   UserX,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 
 type MatchingState = "idle" | "searching" | "matched" | "timeout" | "abandoned";
 
 interface MatchInfo {
-  matchId: string;
+  roomId: string;
   users: [string, string];
   createdAt: number;
   topic: string;
@@ -37,11 +37,10 @@ interface MatchInfo {
 }
 
 interface MatchingDashboardProps {
-  onNavigateToCollaboration: () => void;
   onMatchingStateChange?: (isSearching: boolean) => void;
 }
 
-export function MatchingDashboard({ onNavigateToCollaboration, onMatchingStateChange }: MatchingDashboardProps) {
+export function MatchingDashboard({ onMatchingStateChange }: MatchingDashboardProps) {
   const [selectedDifficulty, setSelectedDifficulty] = useState<string>("Medium");
   const [selectedTopic, setSelectedTopic] = useState<string>("Algorithms");
   const [selectedLanguage, setSelectedLanguage] = useState<string>("JavaScript");
@@ -158,6 +157,7 @@ export function MatchingDashboard({ onNavigateToCollaboration, onMatchingStateCh
         // Already showing "searching" state
       } else if (msg.type === "matched") {
         setMatchingState("matched");
+        console.log("Match found:", msg.match);
         setMatchData(msg.match as MatchInfo);
       } else if (msg.type === "timeout") {
         setMatchingState("timeout");
@@ -217,6 +217,14 @@ export function MatchingDashboard({ onNavigateToCollaboration, onMatchingStateCh
     setMatchingState("idle");
     setMatchData(null);
   };
+
+  const navigate = useNavigate();
+
+  const navigateToCollaboration = () => {
+    if (!matchData) return;
+    localStorage.setItem("roomId", matchData.roomId);
+    navigate(`/collaboration?roomId=${matchData.roomId}`);
+  }
 
   // Cleanup WebSocket on unmount
   useEffect(() => {
@@ -559,7 +567,7 @@ export function MatchingDashboard({ onNavigateToCollaboration, onMatchingStateCh
             {/* Action Buttons */}
             <div className="space-y-3">
               <Button 
-                onClick={onNavigateToCollaboration}
+                onClick={navigateToCollaboration}
                 className="w-full bg-green-600 hover:bg-green-700 text-white h-12 text-base"
               >
                 <CheckCircle className="mr-2 h-5 w-5" />
