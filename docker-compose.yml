@@ -4,10 +4,10 @@ services:
     container_name: user-service
     environment:
       - PORT=${USER_SERVICE_PORT}
-      - DB_HOST=user-postgres
-      - DB_PORT=${DEFAULT_DB_PORT}
-      - DB_USER=${USER_DB_USER}
-      - DB_PASSWORD=${USER_DB_PASSWORD}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=5432
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
       - DB_NAME=${USER_DB_NAME}
       - JWT_SECRET=${JWT_SECRET}
       - ADMIN_EMAIL=${ADMIN_EMAIL}
@@ -15,36 +15,17 @@ services:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
     ports:
       - "${USER_SERVICE_PORT}:${USER_SERVICE_PORT}"
-    depends_on:
-      user-postgres:
-        condition: service_healthy
     restart: unless-stopped
-
-  user-postgres:
-    image: postgres:16-alpine
-    container_name: user-postgres
-    environment:
-      POSTGRES_USER: ${USER_DB_USER}
-      POSTGRES_PASSWORD: ${USER_DB_PASSWORD}
-      POSTGRES_DB: ${USER_DB_NAME}
-    volumes:
-      - user-postgres-data:/var/lib/postgresql/data
-      - ./user-service/src/database/init.sql:/docker-entrypoint-initdb.d/init.sql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${USER_DB_USER} -d ${USER_DB_NAME}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
 
   question-service:
     build: ./question-service
     container_name: question-service
     environment:
       - PORT=${QUESTION_SERVICE_PORT}
-      - DB_HOST=question-postgres
-      - DB_PORT=${DEFAULT_DB_PORT}
-      - DB_USER=${QUESTION_DB_USER}
-      - DB_PASSWORD=${QUESTION_DB_PASSWORD}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=5432
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
       - DB_NAME=${QUESTION_DB_NAME}
       - USER_SERVICE_URL=${USER_SERVICE_URL}
       - AWS_REGION=${AWS_REGION}
@@ -53,26 +34,6 @@ services:
       - S3_BUCKET_NAME=${S3_BUCKET_NAME}
     ports:
       - "${QUESTION_SERVICE_PORT}:${QUESTION_SERVICE_PORT}"
-    depends_on:
-      question-postgres:
-        condition: service_healthy
-    restart: unless-stopped
-
-  question-postgres:
-    image: postgres:16-alpine
-    container_name: question-postgres
-    environment:
-      POSTGRES_USER: ${QUESTION_DB_USER}
-      POSTGRES_PASSWORD: ${QUESTION_DB_PASSWORD}
-      POSTGRES_DB: ${QUESTION_DB_NAME}
-    volumes:
-      - question-postgres-data:/var/lib/postgresql/data
-      - ./question-service/src/db/init.sql:/docker-entrypoint-initdb.d/init.sql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${QUESTION_DB_USER} -d ${QUESTION_DB_NAME}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
     restart: unless-stopped
 
   matching-service:
