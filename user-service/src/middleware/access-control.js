@@ -32,7 +32,7 @@ export async function verifyAccessToken(req, res, next) {
     next();
   } catch (error) {
     console.error('Error verifying access token:', error);
-    return res.status(501).json({ error: 'Unable to verify access token' });
+    return res.status(401).json({ error: "Unable to verify access token" });
   }
 }
 
